@@ -8,7 +8,7 @@ RUN apt-get update && \
     g++
 
 
-RUN pip install nemoguardrails
+RUN pip install nemoguardrails openai
 EXPOSE 8000
 
 COPY ./examples/bots /config
