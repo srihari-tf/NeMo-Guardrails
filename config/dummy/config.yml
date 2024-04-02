@@ -1,0 +1,7 @@
+rails:
+    output:
+        flows:
+            - dummy output rail
+    dialog:
+        user_messages:
+            embeddings_only: True
