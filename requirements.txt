@@ -2,3 +2,4 @@ nemoguardrails
 openai
 uvicorn
 fastapi
+langchain-openai
