@@ -7,12 +7,12 @@ RUN apt-get update && \
     gcc \
     g++
 
-RUN python -c "from fastembed.embedding import FlagEmbedding; FlagEmbedding('sentence-transformers/all-MiniLM-L6-v2');"
-
 WORKDIR /code
 
 COPY ./requirements.txt /code/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+
+RUN python -c "from fastembed.embedding import FlagEmbedding; FlagEmbedding('sentence-transformers/all-MiniLM-L6-v2');"
 
 COPY . /code/app
 RUN nemoguardrails --help
