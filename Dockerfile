@@ -7,19 +7,16 @@ RUN apt-get update && \
     gcc \
     g++
 
-
-RUN pip install nemoguardrails openai
-EXPOSE 8000
-
-COPY ./examples/bots /config
-
-
-# Download the `all-MiniLM-L6-v2` model using a Python command
 RUN python -c "from fastembed.embedding import FlagEmbedding; FlagEmbedding('sentence-transformers/all-MiniLM-L6-v2');"
 
-# Initialize Nemoguardrails to ensure everything is set up correctly
+WORKDIR /code
+
+COPY ./requirements.txt /code/requirements.txt
+RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+
+COPY . /code/app
 RUN nemoguardrails --help
 
-# Define the default command to run when starting the container
-ENTRYPOINT ["nemoguardrails"]
-CMD ["server", "--verbose", "--config=/config"]
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "
