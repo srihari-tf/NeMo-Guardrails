@@ -95,31 +95,31 @@ class InputRailsConfig(BaseModel):
 
 class Params(BaseModel):
     model: str
-    prompt: Optional[Union[str, List[str]]]
-    messages: Optional[List[Message]]
-    functions: Optional[List[Function]]
-    function_call: Optional[Union[str, Dict[str, str]]]
+    prompt: Optional[Union[str, List[str]]] = ''
+    messages: Optional[List[Message]] = []
+    functions: Optional[List[Function]] = []
+    function_call: Optional[Union[str, Dict[str, str]]] = ''
     max_tokens: Optional[int] = 100
-    temperature: Optional[float]
-    top_p: Optional[float]
-    n: Optional[int]
-    stream: Optional[bool]
-    logprobs: Optional[int]
-    echo: Optional[bool]
-    stop: Optional[Union[str, List[str]]]
-    presence_penalty: Optional[float]
-    frequency_penalty: Optional[float]
-    best_of: Optional[int]
-    logit_bias: Optional[Dict[str, int]]
-    user: Optional[str]
-    context: Optional[str]
-    examples: Optional[List[Example]]
-    top_k: Optional[int]
-    tools: Optional[List[Tool]]
-    tool_choice: Optional[str]
-    tfy_log_request: Optional[bool] = None
-    custom_metadata: Optional[dict] = None
-    rails_config: Optional[InputRailsConfig]
+    temperature: Optional[float] = 1.0
+    top_p: Optional[float] = 1.0
+    n: Optional[int] = 1
+    stream: Optional[bool] = False
+    logprobs: Optional[int] = None
+    echo: Optional[bool] = False
+    stop: Optional[Union[str, List[str]]] = None
+    presence_penalty: Optional[float] = 0.0
+    frequency_penalty: Optional[float] = 0.0
+    best_of: Optional[int] = 1
+    logit_bias: Optional[Dict[str, int]] = {}
+    user: Optional[str] = ''
+    context: Optional[str] = ''
+    examples: Optional[List[Example]] = []
+    top_k: Optional[int] = None
+    tools: Optional[List[Tool]] = []
+    tool_choice: Optional[str] = ''
+    tfy_log_request: Optional[bool] = False
+    custom_metadata: Optional[dict] = {}
+    rails_config: Optional[InputRailsConfig] = None
 
 
 app = FastAPI()
