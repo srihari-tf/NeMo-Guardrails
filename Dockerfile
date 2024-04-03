@@ -1,4 +1,4 @@
-FROM python:3.10
+FROM python:3.9
 
 # Install git, gcc, and g++ using a single RUN statement to reduce layers
 RUN apt-get update && \

@@ -1,5 +1,5 @@
-nemoguardrails
-openai
-uvicorn
-fastapi
-langchain-openai
+nemoguardrails==0.8.1
+openai==1.14.2
+uvicorn==0.23.2
+fastapi==0.103.1
+langchain-openai==0.1.1
