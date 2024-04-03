@@ -92,32 +92,31 @@ class Example(BaseModel):
 class InputRailsConfig(BaseModel):
     name: str
 
-
 class Params(BaseModel):
     model: str
-    prompt: Optional[Union[str, List[str]]] = ''
+    prompt: Optional[Union[str, List[str]]] = None
     messages: Optional[List[Message]] = []
     functions: Optional[List[Function]] = []
-    function_call: Optional[Union[str, Dict[str, str]]] = ''
-    max_tokens: Optional[int] = 100
-    temperature: Optional[float] = 1.0
-    top_p: Optional[float] = 1.0
-    n: Optional[int] = 1
-    stream: Optional[bool] = False
+    function_call: Optional[Union[str, Dict[str, str]]] = None
+    max_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    n: Optional[int] = None
+    stream: Optional[bool] = None
     logprobs: Optional[int] = None
-    echo: Optional[bool] = False
+    echo: Optional[bool] = None
     stop: Optional[Union[str, List[str]]] = None
-    presence_penalty: Optional[float] = 0.0
-    frequency_penalty: Optional[float] = 0.0
-    best_of: Optional[int] = 1
+    presence_penalty: Optional[float] = None
+    frequency_penalty: Optional[float] = None
+    best_of: Optional[int] = None
     logit_bias: Optional[Dict[str, int]] = {}
-    user: Optional[str] = ''
-    context: Optional[str] = ''
+    user: Optional[str] = None
+    context: Optional[str] = None
     examples: Optional[List[Example]] = []
     top_k: Optional[int] = None
     tools: Optional[List[Tool]] = []
-    tool_choice: Optional[str] = ''
-    tfy_log_request: Optional[bool] = False
+    tool_choice: Optional[str] = None
+    tfy_log_request: Optional[bool] = None
     custom_metadata: Optional[dict] = {}
     rails_config: Optional[InputRailsConfig] = None
 
