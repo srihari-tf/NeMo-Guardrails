@@ -9,7 +9,7 @@ from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_openai import ChatOpenAI, OpenAI
 from nemoguardrails import RailsConfig
 from nemoguardrails.integrations.langchain.runnable_rails import RunnableRails
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, RootModel
 
 
 class ContentType(BaseModel):
@@ -25,9 +25,7 @@ class CitationSource(BaseModel):
     license: Optional[str] = None
 
 
-class JsonSchema(BaseModel):
-    # This is a placeholder for any JSON object
-    __root__: Dict[str, Any]
+JsonSchema = RootModel[Dict[str, str]]
 
 
 class Function(BaseModel):
@@ -127,21 +125,24 @@ class Params(BaseModel):
 app = FastAPI()
 
 # endpoint to list all guardrails with name
+
+
 @app.get("/guardrails")
 async def list_guardrails():
-    list_of_guardrails: List[InputRailsConfig]  = [];
+    list_of_guardrails: List[InputRailsConfig] = []
     for guardrail in os.listdir("./config"):
         try:
             RailsConfig.from_path(f"./config/{guardrail}")
             list_of_guardrails.append(InputRailsConfig(name=guardrail))
         except:
             pass
-    
+
     return {"guardrails": list_of_guardrails}
+
 
 @app.post("/chat/completions")
 async def chat_completions(request: Params):
-    config = RailsConfig(models=[],passthrough=True)
+    config = RailsConfig(models=[], passthrough=True)
     if request.rails_config:
         config_path = f"./config/{request.rails_config.name}"
         try:
@@ -187,7 +188,7 @@ async def chat_completions(request: Params):
 
 @app.post("/completions")
 async def completions(request: Params):
-    config = RailsConfig(models=[],passthrough=True)
+    config = RailsConfig(models=[], passthrough=True)
     if request.rails_config:
         config_path = f"./config/{request.rails_config.name}"
         try:
