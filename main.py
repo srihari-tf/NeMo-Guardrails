@@ -2,21 +2,25 @@ import json
 import os
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Depends
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_openai import ChatOpenAI, OpenAI
 from nemoguardrails import RailsConfig
 from nemoguardrails.integrations.langchain.runnable_rails import RunnableRails
-from pydantic import BaseModel, Field, RootModel
+from pydantic import BaseModel, Field
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from dotenv import load_dotenv
 
+load_dotenv() 
+BASE_URL = os.getenv("BASE_URL", "https://app.devtest.truefoundry.tech/api/llm/openai")
 
+# Model definitions
 class ContentType(BaseModel):
     type: str
     text: Optional[str] = None
     image_url: Optional[Dict[str, str]] = None
-
 
 class CitationSource(BaseModel):
     startIndex: Optional[int] = None
@@ -24,70 +28,30 @@ class CitationSource(BaseModel):
     uri: Optional[str] = None
     license: Optional[str] = None
 
+class CitationMetadata(BaseModel):
+    citationSources: Optional[List[CitationSource]] = None
 
-JsonSchema = RootModel[Dict[str, str]]
-
+class Message(BaseModel):
+    role: Union[Literal["system"], Literal["user"], Literal["assistant"], Literal["function"], Literal["tool"]]
+    content: Optional[Union[str, List[ContentType]]] = None
+    name: Optional[str] = None
+    function_call: Optional[Any] = Field(default=None, description="Arbitrary JSON object or any value representing a function call.")
+    tool_calls: Optional[Any] = Field(default=None, description="Arbitrary JSON object or any value representing tool calls.")
+    tool_call_id: Optional[str] = None
+    citationMetadata: Optional[CitationMetadata] = None
 
 class Function(BaseModel):
     name: str
     description: Optional[str] = None
-    parameters: Optional[JsonSchema] = None
-
+    parameters: Optional[Dict[str, Any]] = None
 
 class Tool(BaseModel):
     type: str
     function: Optional[Function] = None
 
-
-class CitationMetadata(BaseModel):
-    citationSources: Optional[List[CitationSource]] = None
-
-
-class ContentType(BaseModel):
-    type: str
-    text: Optional[str] = None
-    image_url: Optional[Dict[str, str]] = None
-
-
-class CitationSource(BaseModel):
-    startIndex: Optional[int] = None
-    endIndex: Optional[int] = None
-    uri: Optional[str] = None
-    license: Optional[str] = None
-
-
-class CitationMetadata(BaseModel):
-    citationSources: Optional[List[CitationSource]] = None
-
-
-class Message(BaseModel):
-    role: Union[Literal["system"], Literal["user"],
-                Literal["assistant"], Literal["function"], Literal["tool"]]
-    content: Optional[Union[str, List[ContentType]]] = None
-    name: Optional[str] = None
-    function_call: Optional[Any] = Field(
-        default=None, description="Arbitrary JSON object or any value representing a function call.")
-    tool_calls: Optional[Any] = Field(
-        default=None, description="Arbitrary JSON object or any value representing tool calls.")
-    tool_call_id: Optional[str] = None
-    citationMetadata: Optional[CitationMetadata] = None
-
-
-class Content(BaseModel):
-    role: Union[Literal["system"], Literal["user"],
-                Literal["assistant"], Literal["function"], Literal["tool"]]
-    content: Optional[Union[str, List[ContentType]]] = None
-    name: Optional[str] = None
-    function_call: Optional[Any] = None
-    tool_calls: Optional[Any] = None
-    tool_call_id: Optional[str] = None
-    citationMetadata: Optional[CitationMetadata] = None
-
-
 class Example(BaseModel):
-    input: Optional[Content] = None
-    output: Optional[Content] = None
-
+    input: Optional[Message] = None
+    output: Optional[Message] = None
 
 class InputRailsConfig(BaseModel):
     name: str
@@ -95,11 +59,11 @@ class InputRailsConfig(BaseModel):
 class Params(BaseModel):
     model: str
     prompt: Optional[Union[str, List[str]]] = None
-    messages: Optional[List[Message]] = []
-    functions: Optional[List[Function]] = []
+    messages: Optional[List[Message]] = None
+    functions: Optional[List[Function]] = None
     function_call: Optional[Union[str, Dict[str, str]]] = None
     max_tokens: Optional[int] = None
-    temperature: Optional[float] = None
+    temperature: Optional[float] = 0.7
     top_p: Optional[float] = None
     n: Optional[int] = None
     stream: Optional[bool] = None
@@ -109,22 +73,33 @@ class Params(BaseModel):
     presence_penalty: Optional[float] = None
     frequency_penalty: Optional[float] = None
     best_of: Optional[int] = None
-    logit_bias: Optional[Dict[str, int]] = {}
+    logit_bias: Optional[Dict[str, int]] = None
     user: Optional[str] = None
     context: Optional[str] = None
-    examples: Optional[List[Example]] = []
+    examples: Optional[List[Example]] = None
     top_k: Optional[int] = None
-    tools: Optional[List[Tool]] = []
+    tools: Optional[List[Tool]] = None
     tool_choice: Optional[str] = None
     tfy_log_request: Optional[bool] = None
-    custom_metadata: Optional[dict] = {}
+    custom_metadata: Optional[dict] = None
     rails_config: Optional[InputRailsConfig] = None
 
 
+def get_model_kwargs_from_params(params: Params) -> Dict[str, Any]:
+    model_kwargs = {}
+    for key in params.model_fields.keys():
+        if key in ["model", "prompt", "messages", "rails_config", "tfy_log_request", "custom_metadata", "logit_bias", "temperature"]:
+            continue
+        value = getattr(params, key)
+        if value is not None:
+            model_kwargs[key] = value
+    return model_kwargs
+
 app = FastAPI()
+security = HTTPBearer()
 
-# endpoint to list all guardrails with name
-
+def get_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    return credentials.credentials
 
 @app.get("/guardrails")
 async def list_guardrails():
@@ -140,7 +115,7 @@ async def list_guardrails():
 
 
 @app.post("/chat/completions")
-async def chat_completions(request: Params):
+async def chat_completions(request: Params, api_key: str = Depends(get_api_key)):
     config = RailsConfig(models=[], passthrough=True)
     if request.rails_config:
         config_path = f"./config/{request.rails_config.name}"
@@ -163,15 +138,12 @@ async def chat_completions(request: Params):
     llm = ChatOpenAI(
         model=request.model,
         temperature=request.temperature,
-        max_tokens=request.max_tokens,
-        top_p=request.top_p,
-        frequency_penalty=request.frequency_penalty,
-        presence_penalty=request.presence_penalty,
+        model_kwargs=get_model_kwargs_from_params(request),
         streaming=False,
-        api_key="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImxzV0lDNWtkU1V1bXg1ckg5NkR6bFdYUGxJTSJ9.eyJhdWQiOiI4OTUyNTNhZi1lYzlkLTRiZTYtODNkMS02ZjI0OGU2NDRlNzkiLCJleHAiOjM3MTE1Mjc2NjEsImlhdCI6MTcxMTUyNzY2MSwiaXNzIjoidHJ1ZWZvdW5kcnkuY29tIiwic3ViIjoiY2x1OWpkbXhzMDE4bzAxbzY0b2ZtMWYzNSIsImp0aSI6IjYxNDYyZmVkLTA4NjgtNGQyNS05Njg4LTYzMDg5MThhODYxMCIsInVzZXJuYW1lIjoibXktbGFuZ2NoYWluLWFwaS1rZXkiLCJ1c2VyVHlwZSI6InNlcnZpY2VhY2NvdW50IiwidGVuYW50TmFtZSI6InRydWVmb3VuZHJ5Iiwicm9sZXMiOlsidGVuYW50LWFkbWluIiwidGVuYW50LW1lbWJlciJdLCJhcHBsaWNhdGlvbklkIjoiODk1MjUzYWYtZWM5ZC00YmU2LTgzZDEtNmYyNDhlNjQ0ZTc5In0.Klf9Y4xur0dwVUB7sKTBIsdQo2_9u9cYQ2a-jxKO89ijjIxf6hwzZS2zOCED3YCpD45kT0jqOYlpj4GzY7UKyhqOzsdw9ob0kHaaINXLqiLJtiL0Hm8OOkg23RAuE2-HJIElr0Xlc2_hXab9cbruRE_oVbLZfB4dBcHi0AdC4cXgay7yuP98DTe1ARjt88XLwkay53psvye7iWoc0knxCQ8FIhVp6j-c2eJMkKB1qiPHQZ778MXclGr_4ER8sX6CwgGvC2THFQZvuerJc3xHLUv_r-OByfybO6C1bchVAvFx4RYY3Jd6_C_cCzDk13PAcQ64iG9O4CU33Aew4e1Iwg",
-        base_url="https://app.devtest.truefoundry.tech/api/llm/openai",
+        logit_bias=request.logit_bias,
+        api_key=api_key,
+        base_url=BASE_URL,
         extra_headers=extra_headers,
-
     )
 
     prompt = ChatPromptTemplate.from_messages(
@@ -186,7 +158,7 @@ async def chat_completions(request: Params):
 
 
 @app.post("/completions")
-async def completions(request: Params):
+async def completions(request: Params, api_key: str = Depends(get_api_key)):
     config = RailsConfig(models=[], passthrough=True)
     if request.rails_config:
         config_path = f"./config/{request.rails_config.name}"
@@ -205,17 +177,16 @@ async def completions(request: Params):
             "tfy_log_request": request.tfy_log_request and str(request.tfy_log_request).lower() or "false",
             **(request.custom_metadata if request.custom_metadata else {})
         })
-
+    
+    print("get_model_kwargs_from_params(request),", get_model_kwargs_from_params(request),)
     llm = OpenAI(
         model=request.model,
-        temperature=request.temperature,
-        max_tokens=request.max_tokens,
-        top_p=request.top_p,
-        frequency_penalty=request.frequency_penalty,
-        presence_penalty=request.presence_penalty,
+        model_kwargs=get_model_kwargs_from_params(request),
         streaming=False,
-        api_key="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImxzV0lDNWtkU1V1bXg1ckg5NkR6bFdYUGxJTSJ9.eyJhdWQiOiI4OTUyNTNhZi1lYzlkLTRiZTYtODNkMS02ZjI0OGU2NDRlNzkiLCJleHAiOjM3MTE1Mjc2NjEsImlhdCI6MTcxMTUyNzY2MSwiaXNzIjoidHJ1ZWZvdW5kcnkuY29tIiwic3ViIjoiY2x1OWpkbXhzMDE4bzAxbzY0b2ZtMWYzNSIsImp0aSI6IjYxNDYyZmVkLTA4NjgtNGQyNS05Njg4LTYzMDg5MThhODYxMCIsInVzZXJuYW1lIjoibXktbGFuZ2NoYWluLWFwaS1rZXkiLCJ1c2VyVHlwZSI6InNlcnZpY2VhY2NvdW50IiwidGVuYW50TmFtZSI6InRydWVmb3VuZHJ5Iiwicm9sZXMiOlsidGVuYW50LWFkbWluIiwidGVuYW50LW1lbWJlciJdLCJhcHBsaWNhdGlvbklkIjoiODk1MjUzYWYtZWM5ZC00YmU2LTgzZDEtNmYyNDhlNjQ0ZTc5In0.Klf9Y4xur0dwVUB7sKTBIsdQo2_9u9cYQ2a-jxKO89ijjIxf6hwzZS2zOCED3YCpD45kT0jqOYlpj4GzY7UKyhqOzsdw9ob0kHaaINXLqiLJtiL0Hm8OOkg23RAuE2-HJIElr0Xlc2_hXab9cbruRE_oVbLZfB4dBcHi0AdC4cXgay7yuP98DTe1ARjt88XLwkay53psvye7iWoc0knxCQ8FIhVp6j-c2eJMkKB1qiPHQZ778MXclGr_4ER8sX6CwgGvC2THFQZvuerJc3xHLUv_r-OByfybO6C1bchVAvFx4RYY3Jd6_C_cCzDk13PAcQ64iG9O4CU33Aew4e1Iwg",
-        base_url="https://app.devtest.truefoundry.tech/api/llm/openai",
+        temperature=request.temperature,
+        logit_bias=request.logit_bias,
+        api_key=api_key,
+        base_url=BASE_URL,
         extra_headers=extra_headers,
     )
 
